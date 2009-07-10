@@ -1,4 +1,8 @@
 ----------------------------
+revision : 0.03
+date : 2009/07/10 16:33:20
+remove some debug warning
+----------------------------
 revision : 0.02
 date : 2009/07/10 15:52:17
 add namespace and a small header on each queue (to check validity of a previuous queue)

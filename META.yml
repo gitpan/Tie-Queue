@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               Tie-Queue
-version:            0.02
+version:            0.03
 abstract:           Tie::Queue Is a tie ARRAY over a TokyoTyrant database used as a Queue system
 author:  []
 license:            unknown

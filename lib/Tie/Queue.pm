@@ -127,7 +127,7 @@ use TokyoTyrant;
 
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
 
-$VERSION = '0.02';
+$VERSION = '0.03';
 
 our @ISA = qw( Exporter Tie::StdArray );
 
@@ -258,7 +258,6 @@ sub POP
     my $self = shift;
     my $rdb  = $self->{ _rdb };
     my $last = $rdb->get( $self->{ _prefix } . 2 )+-1;
-    warn " l=$last";
     my $val;
     if ( $last >= 3 )
     {
