@@ -1,0 +1,9 @@
+----------------------------
+revision : 0.02
+date : 2009/07/10 15:52:17
+add namespace and a small header on each queue (to check validity of a previuous queue)
+----------------------------
+revision : 0.01
+date : 2009/07/10 11:10:20
+first full functional version
+----------------------------
