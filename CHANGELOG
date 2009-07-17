@@ -1,4 +1,13 @@
 ----------------------------
+revision : 0.05
+date : 2009/07/17 08:51:17
+typo error in POP
+----------------------------
+revision : 0.04
+date : 2009/07/15 19:18:24
+don't do autosync by default
+add paramter for autosync
+----------------------------
 revision : 0.03
 date : 2009/07/10 16:33:20
 remove some debug warning

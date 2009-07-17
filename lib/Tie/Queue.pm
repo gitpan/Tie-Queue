@@ -104,7 +104,10 @@ package Tie::Queue;
   shift
   exits
   scalar
-  clear
+  
+  Specific function
+  CLEAR
+  SYNC
 
   
   The following function are not implemented.
@@ -127,7 +130,7 @@ use TokyoTyrant;
 
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
 
-$VERSION = '0.03';
+$VERSION = '0.05';
 
 our @ISA = qw( Exporter Tie::StdArray );
 
@@ -138,14 +141,15 @@ I< only the queue relevant functions are present >
 =head2 tie
 	
 	Tie an array over a DB
-	my $t = tie( my @myarray, "Tie::Queue", '127.0.0.1', 1978, 1 , 1 , 'first_name'  );
+	my $t = tie( my @myarray, "Tie::Queue", '127.0.0.1', 1978, 1 , 1 , 'first_name' ,  1 );
 	
-	Five optional parameter are allowed
+	Six optional parameter are allowed
 	    1) the IP where the TokyoTyrant is running ( default 127.0.0.1 )
 	    2) the port on which the TokyoTyrant is listenning ( default 1978 )
 	    3) a flag to delete at start the DB ( default 0 )
 	    4) a flag to serilize/desialize on the fly the data stored in the DB
 	    5) a namespace to allow more than one queue on the same DB ( default Tie-Queue )
+	    6) a flag to activate or deactivate auto_sync ( default on)
       
 =cut
 
@@ -159,6 +163,7 @@ sub TIEARRAY
     $data{ _delete_on_start } = $_[3] || 0;
     $data{ _serialize }       = $_[4] || 0;
     $data{ _prefix }          = $_[5] || 'Tie-Queue';
+    $data{ _auto_sync }       = $_[6] || 1; 
 
     my $rdb = TokyoTyrant::RDB->new();
     if ( !$rdb->open( $data{ _host }, $data{ _port } ) )
@@ -243,7 +248,7 @@ sub PUSH
     my $last = $rdb->get( $self->{ _prefix } . 2 );
     $rdb->put( $self->{ _prefix } . 2,     $last + 1 );
     $rdb->put( $self->{ _prefix } . $last, $value );
-    $rdb->sync();
+    $rdb->sync() if ( $self->{ _auto_sync } );
 }
 
 =head2 POP
@@ -257,14 +262,14 @@ sub POP
 {
     my $self = shift;
     my $rdb  = $self->{ _rdb };
-    my $last = $rdb->get( $self->{ _prefix } . 2 )+-1;
+    my $last = $rdb->get( $self->{ _prefix } . 2 )-1;
     my $val;
     if ( $last >= 3 )
     {
         $val = $rdb->get( $self->{ _prefix } . $last );
         $rdb->put( $self->{ _prefix } . 2, $last   );
         $rdb->out( $self->{ _prefix } . $last );
-        $rdb->sync();
+        $rdb->sync() if ( $self->{ _auto_sync } );;
         $val = $self->__deserialize__( $val ) if ( $self->{ _serialize } );
     }
     return $val;
@@ -285,7 +290,7 @@ sub SHIFT
     my $last  = $rdb->get( $self->{ _prefix } . 2 );
     my $val   = $rdb->get( $self->{ _prefix } . $first );
     $rdb->put( $self->{ _prefix } . 1, $first + 1 );
-    $rdb->sync();
+    $rdb->sync() if ( $self->{ _auto_sync } );
     $val = $self->__deserialize__( $val ) if ( $self->{ _serialize } );
     return $val;
 }
@@ -347,6 +352,20 @@ sub FETCHSIZE
     return ( $size );
 }
 
+=head2 SYNC
+	
+	FOorce a sync of the DB ( not usefull is auto_sync is on)
+	$t->SYNC;
+      
+=cut
+
+sub SYNC
+{
+    my $self = shift;
+    my $rdb  = $self->{ _rdb };
+    $rdb->sync() ;
+}
+
 =head2 CLEAR
 	
 	Delete all element in the array
@@ -361,7 +380,7 @@ sub CLEAR
     while ( $self->POP() ) { }
     $rdb->put( $self->{ _prefix } . 1, 3 );
     $rdb->put( $self->{ _prefix } . 2, 3 );
-    $rdb->sync();
+    $rdb->sync() if ( $self->{ _auto_sync } );
 }
 
 =head2 DESTROY
