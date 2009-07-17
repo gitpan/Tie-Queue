@@ -104,6 +104,7 @@ package Tie::Queue;
   shift
   exits
   scalar
+  storesize ( to allow undef @a)
   
   Specific function
   CLEAR
@@ -112,10 +113,10 @@ package Tie::Queue;
   
   The following function are not implemented.
   
-  extend
-  store
-  storesize
-  splice
+  EXTEND
+  STORE
+  DELETE
+  SPLICE
  
 =cut
 
@@ -130,7 +131,7 @@ use TokyoTyrant;
 
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
 
-$VERSION = '0.05';
+$VERSION = '0.06';
 
 our @ISA = qw( Exporter Tie::StdArray );
 
@@ -269,7 +270,7 @@ sub POP
         $val = $rdb->get( $self->{ _prefix } . $last );
         $rdb->put( $self->{ _prefix } . 2, $last   );
         $rdb->out( $self->{ _prefix } . $last );
-        $rdb->sync() if ( $self->{ _auto_sync } );;
+        $rdb->sync() if ( $self->{ _auto_sync } );
         $val = $self->__deserialize__( $val ) if ( $self->{ _serialize } );
     }
     return $val;
@@ -289,6 +290,7 @@ sub SHIFT
     my $first = $rdb->get( $self->{ _prefix } . 1 );
     my $last  = $rdb->get( $self->{ _prefix } . 2 );
     my $val   = $rdb->get( $self->{ _prefix } . $first );
+    $rdb->out( $self->{ _prefix } . $first );
     $rdb->put( $self->{ _prefix } . 1, $first + 1 );
     $rdb->sync() if ( $self->{ _auto_sync } );
     $val = $self->__deserialize__( $val ) if ( $self->{ _serialize } );
@@ -431,7 +433,34 @@ sub STORE { carp "no STORE function"; }
 	
 =cut
 
-sub STORESIZE { carp "no STORESIZE function"; }
+sub STORESIZE
+{
+    my $self  = shift;
+    my $new_size = shift;
+    my $rdb   = $self->{ _rdb };
+    my $first = $rdb->get( $self->{ _prefix } . 1 );
+    my $last  = $rdb->get( $self->{ _prefix } . 2 );
+    for ( ($first+$new_size) .. $last )
+    {
+        $self->POP;
+    }    
+    $rdb->sync() if ( $self->{ _auto_sync } );;
+    $rdb->put( $self->{ _prefix } . 2, $first+$new_size );
+    return $last - $first;
+}
+
+=head2 DELETE
+	
+	Not implemented
+	
+=cut
+
+sub DELETE { carp "no DELETE function"; }
+
+
+########################
+# internal function
+########################
 
 sub __serialize__
 {

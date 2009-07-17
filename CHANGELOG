@@ -1,4 +1,9 @@
 ----------------------------
+revision : 0.06
+date : 2009/07/17 10:47:33
+add STORESIZE to allow undef
+really delete item from the queue with SHIFT and POP
+----------------------------
 revision : 0.05
 date : 2009/07/17 08:51:17
 typo error in POP
