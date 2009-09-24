@@ -102,7 +102,7 @@ package Tie::Queue;
   push
   pop
   shift
-  exits
+  exists
   scalar
   storesize ( to allow undef @a)
   
@@ -131,7 +131,7 @@ use TokyoTyrant;
 
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
 
-$VERSION = '0.06';
+$VERSION = '0.08';
 
 our @ISA = qw( Exporter Tie::StdArray );
 
@@ -148,9 +148,10 @@ I< only the queue relevant functions are present >
 	    1) the IP where the TokyoTyrant is running ( default 127.0.0.1 )
 	    2) the port on which the TokyoTyrant is listenning ( default 1978 )
 	    3) a flag to delete at start the DB ( default 0 )
-	    4) a flag to serilize/desialize on the fly the data stored in the DB
+	    4) a flag to serialize/deserialize on the fly the data stored in the DB
 	    5) a namespace to allow more than one queue on the same DB ( default Tie-Queue )
 	    6) a flag to activate or deactivate auto_sync ( default on)
+	    7) a flag to prevent undef value to be pushed ( default off/0)
       
 =cut
 
@@ -164,13 +165,14 @@ sub TIEARRAY
     $data{ _delete_on_start } = $_[3] || 0;
     $data{ _serialize }       = $_[4] || 0;
     $data{ _prefix }          = $_[5] || 'Tie-Queue';
-    $data{ _auto_sync }       = $_[6] || 1; 
+    $data{ _auto_sync }       = $_[6] || 1;
+    $data{ _no_undef }        = $_[7] || 0;
 
     my $rdb = TokyoTyrant::RDB->new();
     if ( !$rdb->open( $data{ _host }, $data{ _port } ) )
     {
         my $ecode = $rdb->ecode();
-        croak( 'Queue open error: ' . $rdb->errmsg( $ecode ) . "\n" );
+        carp( 'Queue open error: ' . $rdb->errmsg( $ecode ) . "\n" );
     }
     else
     {
@@ -192,7 +194,7 @@ sub TIEARRAY
     {
         if ( $head !~ /^Tie::Queue$/ )
         {
-            croak( "Data in queue corrupted: Wrong Head\n" );
+            carp( "Data in queue corrupted: Wrong Head\n" );
         }
         else
         {
@@ -213,18 +215,18 @@ sub TIEARRAY
     {
         if ( defined $first || defined $last )
         {
-            croak( "Data in queue corrupted: Data without Head\n" );
+            carp( "Data in queue corrupted: Data without Head\n" );
         }
         $rdb->put( $data{ _prefix } . 0, 'Tie::Queue' );
         if ( !$rdb->put( $data{ _prefix } . 1, 3 ) )
         {
             my $ecode = $rdb->ecode();
-            croak( 'Could not initialise queue: ' . $rdb->errmsg( $ecode ) . "\n" );
+            carp( 'Could not initialise queue: ' . $rdb->errmsg( $ecode ) . "\n" );
         }
         if ( !$rdb->put( $data{ _prefix } . 2, 3 ) )
         {
             my $ecode = $rdb->ecode();
-            croak( 'Could not initialise queue: ' . $rdb->errmsg( $ecode ) . "\n" );
+            carp( 'Could not initialise queue: ' . $rdb->errmsg( $ecode ) . "\n" );
         }
     }
 
@@ -244,12 +246,15 @@ sub PUSH
     my $self  = shift;
     my $value = shift;
 
-    my $rdb = $self->{ _rdb };
-    $value = $self->__serialize__( $value ) if ( $self->{ _serialize } );
-    my $last = $rdb->get( $self->{ _prefix } . 2 );
-    $rdb->put( $self->{ _prefix } . 2,     $last + 1 );
-    $rdb->put( $self->{ _prefix } . $last, $value );
-    $rdb->sync() if ( $self->{ _auto_sync } );
+    if ( ( defined $value ) || ( !$self->{ _no_undef } ) )
+    {
+        my $rdb = $self->{ _rdb };
+        $value = $self->__serialize__( $value ) if ( $self->{ _serialize } );
+        my $last = $rdb->get( $self->{ _prefix } . 2 );
+        $rdb->put( $self->{ _prefix } . 2,     $last + 1 );
+        $rdb->put( $self->{ _prefix } . $last, $value );
+        $rdb->sync() if ( $self->{ _auto_sync } );
+    }
 }
 
 =head2 POP
@@ -263,12 +268,12 @@ sub POP
 {
     my $self = shift;
     my $rdb  = $self->{ _rdb };
-    my $last = $rdb->get( $self->{ _prefix } . 2 )-1;
+    my $last = $rdb->get( $self->{ _prefix } . 2 ) - 1;
     my $val;
     if ( $last >= 3 )
     {
         $val = $rdb->get( $self->{ _prefix } . $last );
-        $rdb->put( $self->{ _prefix } . 2, $last   );
+        $rdb->put( $self->{ _prefix } . 2, $last );
         $rdb->out( $self->{ _prefix } . $last );
         $rdb->sync() if ( $self->{ _auto_sync } );
         $val = $self->__deserialize__( $val ) if ( $self->{ _serialize } );
@@ -300,7 +305,7 @@ sub SHIFT
 =head2 EXISTS
 	
 	Test if an element in the array exist
-	print "element exists\n" if (exits $myarray[5]);
+	print "element exists\n" if (exists $myarray[5]);
       
 =cut
 
@@ -349,6 +354,11 @@ sub FETCHSIZE
 {
     my $self = shift;
     my $rdb  = $self->{ _rdb };
+#     my $end =  0 ;
+#     my $start = 0 ;
+#     $end = $rdb->get( $self->{ _prefix } . 2 ) if ( ($rdb->get( $self->{ _prefix } . 2 )) =~ /^\d+$/);
+#     $start = $rdb->get( $self->{ _prefix } . 1 ) if ( ($rdb->get( $self->{ _prefix } . 1 )) =~ /^\d+$/);
+#     my $size =  $end - $start;
     my $size = $rdb->get( $self->{ _prefix } . 2 ) - $rdb->get( $self->{ _prefix } . 1 );
     return 0 if ( $size < 0 );
     return ( $size );
@@ -365,7 +375,7 @@ sub SYNC
 {
     my $self = shift;
     my $rdb  = $self->{ _rdb };
-    $rdb->sync() ;
+    $rdb->sync();
 }
 
 =head2 CLEAR
@@ -409,7 +419,7 @@ I< Most of then are not related to a QUEUE >
 	
 =cut
 
-sub UNSHIFT { carp "no EXTEND function"; }
+sub UNSHIFT { carp "no UNSHIFT function"; }
 
 =head2 EXTEND
 	
@@ -435,17 +445,17 @@ sub STORE { carp "no STORE function"; }
 
 sub STORESIZE
 {
-    my $self  = shift;
+    my $self     = shift;
     my $new_size = shift;
-    my $rdb   = $self->{ _rdb };
-    my $first = $rdb->get( $self->{ _prefix } . 1 );
-    my $last  = $rdb->get( $self->{ _prefix } . 2 );
-    for ( ($first+$new_size) .. $last )
+    my $rdb      = $self->{ _rdb };
+    my $first    = $rdb->get( $self->{ _prefix } . 1 );
+    my $last     = $rdb->get( $self->{ _prefix } . 2 );
+    for ( ( $first + $new_size ) .. $last )
     {
         $self->POP;
-    }    
-    $rdb->sync() if ( $self->{ _auto_sync } );;
-    $rdb->put( $self->{ _prefix } . 2, $first+$new_size );
+    }
+    $rdb->sync() if ( $self->{ _auto_sync } );
+    $rdb->put( $self->{ _prefix } . 2, $first + $new_size );
     return $last - $first;
 }
 
@@ -456,7 +466,6 @@ sub STORESIZE
 =cut
 
 sub DELETE { carp "no DELETE function"; }
-
 
 ########################
 # internal function
