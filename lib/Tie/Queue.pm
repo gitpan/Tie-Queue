@@ -131,7 +131,7 @@ use TokyoTyrant;
 
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
 
-$VERSION = '0.08';
+$VERSION = '0.09';
 
 our @ISA = qw( Exporter Tie::StdArray );
 
@@ -315,7 +315,7 @@ sub EXISTS
     my $key  = shift;
     my $rdb  = $self->{ _rdb };
     return 0 unless ( $rdb->rnum() );
-    my $first = $rdb->get( $self->{ _prefix } . 1 );
+    my $first = $rdb->get( $self->{ _prefix } . 1 ) || 0;
     $key += $first;
     my $val = $rdb->get( $self->{ _prefix } . $key );
     if ( defined $val )
@@ -336,7 +336,7 @@ sub FETCH
     my $self  = shift;
     my $key   = shift;
     my $rdb   = $self->{ _rdb };
-    my $first = $rdb->get( $self->{ _prefix } . 1 );
+    my $first = $rdb->get( $self->{ _prefix } . 1 ) || 0;
     $key += $first;
     my $val = $rdb->get( $self->{ _prefix } . $key );
     $val = $self->__deserialize__( $val ) if ( $self->{ _serialize } );
@@ -359,7 +359,11 @@ sub FETCHSIZE
 #     $end = $rdb->get( $self->{ _prefix } . 2 ) if ( ($rdb->get( $self->{ _prefix } . 2 )) =~ /^\d+$/);
 #     $start = $rdb->get( $self->{ _prefix } . 1 ) if ( ($rdb->get( $self->{ _prefix } . 1 )) =~ /^\d+$/);
 #     my $size =  $end - $start;
-    my $size = $rdb->get( $self->{ _prefix } . 2 ) - $rdb->get( $self->{ _prefix } . 1 );
+    my $end = $rdb->get( $self->{ _prefix } . 2 ) || 0;
+    my $start = $rdb->get( $self->{ _prefix } . 1 ) || 0;
+    my $size = $end - $start;
+
+#     my $size = $rdb->get( $self->{ _prefix } . 2 ) - $rdb->get( $self->{ _prefix } . 1 );
     return 0 if ( $size < 0 );
     return ( $size );
 }

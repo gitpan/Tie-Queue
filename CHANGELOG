@@ -1,4 +1,8 @@
 ----------------------------
+revision : 0.09
+date : 2009/09/ 24 15:53:14 2009 +0200
+fix a warning when getting the size of an empty queue
+----------------------------
 revision : 0.08
 date : 2009/09/24 11:49:39
 add a flag to prevent insertion of undef value
