@@ -90,31 +90,37 @@ DESCRIPTION
   push
       pop
       shift
-      exits
+      exists
       scalar
-      clear
+      storesize ( to allow undef @a)
+      
+  Specific function
+      CLEAR
+      SYNC
 
       
   The following function are not implemented.
       
-  extend
-      store
-      storesize
-      splice
+  EXTEND
+      STORE
+      DELETE
+      SPLICE
 
 Basic functions
     * only the queue relevant functions are present *
 
   tie
             Tie an array over a DB
-            my $t = tie( my @myarray, "Tie::Queue", '127.0.0.1', 1978, 1 , 1 , 'first_name'  );
+            my $t = tie( my @myarray, "Tie::Queue", '127.0.0.1', 1978, 1 , 1 , 'first_name' ,  1 , 0 );
             
-        Five optional parameter are allowed
+        Six optional parameter are allowed
                 1) the IP where the TokyoTyrant is running ( default 127.0.0.1 )
                 2) the port on which the TokyoTyrant is listenning ( default 1978 )
                 3) a flag to delete at start the DB ( default 0 )
-                4) a flag to serilize/desialize on the fly the data stored in the DB
+                4) a flag to serialize/deserialize on the fly the data stored in the DB
                 5) a namespace to allow more than one queue on the same DB ( default Tie-Queue )
+                6) a flag to activate or deactivate auto_sync ( default 1 )
+                7) a flag to prevent undef value to be pushed ( default 0 )
 
   PUSH
             Add an element at the end of the array
@@ -130,7 +136,7 @@ Basic functions
 
   EXISTS
             Test if an element in the array exist
-            print "element exists\n" if (exits $myarray[5]);
+            print "element exists\n" if (exists $myarray[5]);
 
   FETCH
             Retrieve a specific element from the array
@@ -139,6 +145,10 @@ Basic functions
   FETCHSIZE
             Get the size of the array
             my $data = scalar(@myarray);
+
+  SYNC
+            FOorce a sync of the DB ( not usefull is auto_sync is on)
+            $t->SYNC;
 
   CLEAR
             Delete all element in the array
@@ -161,6 +171,9 @@ Functions not Implemented
             Not implemented
 
   STORESIZE
+            to  resize the array ( this allow a re-initialisation of the array by undef @a )
+
+  DELETE
             Not implemented
 
 AUTHOR

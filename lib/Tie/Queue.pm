@@ -131,7 +131,7 @@ use TokyoTyrant;
 
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
 
-$VERSION = '0.09';
+$VERSION = '0.10';
 
 our @ISA = qw( Exporter Tie::StdArray );
 
@@ -142,7 +142,7 @@ I< only the queue relevant functions are present >
 =head2 tie
 	
 	Tie an array over a DB
-	my $t = tie( my @myarray, "Tie::Queue", '127.0.0.1', 1978, 1 , 1 , 'first_name' ,  1 );
+	my $t = tie( my @myarray, "Tie::Queue", '127.0.0.1', 1978, 1 , 1 , 'first_name' ,  1 , 0 );
 	
 	Six optional parameter are allowed
 	    1) the IP where the TokyoTyrant is running ( default 127.0.0.1 )
@@ -150,8 +150,8 @@ I< only the queue relevant functions are present >
 	    3) a flag to delete at start the DB ( default 0 )
 	    4) a flag to serialize/deserialize on the fly the data stored in the DB
 	    5) a namespace to allow more than one queue on the same DB ( default Tie-Queue )
-	    6) a flag to activate or deactivate auto_sync ( default on)
-	    7) a flag to prevent undef value to be pushed ( default off/0)
+	    6) a flag to activate or deactivate auto_sync ( default 1 )
+	    7) a flag to prevent undef value to be pushed ( default 0 )
       
 =cut
 
@@ -200,7 +200,6 @@ sub TIEARRAY
         {
             if ( $data{ _delete_on_start } )
             {
-
                 for ( my $inx = $first ; $inx <= $last ; $inx++ )
                 {
                     $rdb->out( $data{ _prefix } . $inx );
@@ -208,7 +207,6 @@ sub TIEARRAY
                 $rdb->put( $data{ _prefix } . 1, 3 );
                 $rdb->put( $data{ _prefix } . 2, 3 );
             }
-
         }
     }
     else
@@ -251,8 +249,11 @@ sub PUSH
         my $rdb = $self->{ _rdb };
         $value = $self->__serialize__( $value ) if ( $self->{ _serialize } );
         my $last = $rdb->get( $self->{ _prefix } . 2 );
+	if ( $last =~ /^\d+\z/ )
+	{
         $rdb->put( $self->{ _prefix } . 2,     $last + 1 );
         $rdb->put( $self->{ _prefix } . $last, $value );
+	}
         $rdb->sync() if ( $self->{ _auto_sync } );
     }
 }
@@ -268,7 +269,7 @@ sub POP
 {
     my $self = shift;
     my $rdb  = $self->{ _rdb };
-    my $last = $rdb->get( $self->{ _prefix } . 2 ) - 1;
+    my $last = ($rdb->get( $self->{ _prefix } . 2 )) - 1;
     my $val;
     if ( $last >= 3 )
     {
@@ -443,7 +444,7 @@ sub STORE { carp "no STORE function"; }
 
 =head2 STORESIZE
 	
-	Not implemented
+	to  resize the array ( this allow a re-initialisation of the array by undef @a )
 	
 =cut
 
@@ -492,6 +493,9 @@ sub __deserialize__
     return $serializer->deserialize( $val ) if $val;
     return $val;
 }
+
+
+
 
 1;
 __END__

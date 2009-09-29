@@ -1,6 +1,10 @@
 ----------------------------
+revision : 0.10
+date : 2009/09/29 14:16:19
+don't push if the item number is not a integer
+----------------------------
 revision : 0.09
-date : 2009/09/ 24 15:53:14 2009 +0200
+date : 2009/09/24 15:53:14 2009 +0200
 fix a warning when getting the size of an empty queue
 ----------------------------
 revision : 0.08
