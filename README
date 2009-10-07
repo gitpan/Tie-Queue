@@ -121,6 +121,7 @@ Basic functions
                 5) a namespace to allow more than one queue on the same DB ( default Tie-Queue )
                 6) a flag to activate or deactivate auto_sync ( default 1 )
                 7) a flag to prevent undef value to be pushed ( default 0 )
+                8) a flag to reset a queue if the data queue is corrupted ( default 0 )
 
   PUSH
             Add an element at the end of the array

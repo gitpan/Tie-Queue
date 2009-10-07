@@ -131,7 +131,7 @@ use TokyoTyrant;
 
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
 
-$VERSION = '0.10';
+$VERSION = '0.11';
 
 our @ISA = qw( Exporter Tie::StdArray );
 
@@ -152,6 +152,7 @@ I< only the queue relevant functions are present >
 	    5) a namespace to allow more than one queue on the same DB ( default Tie-Queue )
 	    6) a flag to activate or deactivate auto_sync ( default 1 )
 	    7) a flag to prevent undef value to be pushed ( default 0 )
+	    8) a flag to reset a queue if the data queue is corrupted ( default 0 )
       
 =cut
 
@@ -167,6 +168,7 @@ sub TIEARRAY
     $data{ _prefix }          = $_[5] || 'Tie-Queue';
     $data{ _auto_sync }       = $_[6] || 1;
     $data{ _no_undef }        = $_[7] || 0;
+    $data{ _clear_on_error }  = $_[8] || 0;
 
     my $rdb = TokyoTyrant::RDB->new();
     if ( !$rdb->open( $data{ _host }, $data{ _port } ) )
@@ -194,7 +196,13 @@ sub TIEARRAY
     {
         if ( $head !~ /^Tie::Queue$/ )
         {
-            carp( "Data in queue corrupted: Wrong Head\n" );
+            carp( "Data in queue corrupted: Wrong Head for".$data{ _prefix }."\n" );
+            if ( $data{ _clear_on_error } )
+            {
+                $rdb->put( $data{ _prefix } . 0, 'Tie::Queue' );
+                $rdb->put( $data{ _prefix } . 1, 3 );
+                $rdb->put( $data{ _prefix } . 2, 3 );
+            }
         }
         else
         {
@@ -249,11 +257,11 @@ sub PUSH
         my $rdb = $self->{ _rdb };
         $value = $self->__serialize__( $value ) if ( $self->{ _serialize } );
         my $last = $rdb->get( $self->{ _prefix } . 2 );
-	if ( $last =~ /^\d+\z/ )
-	{
-        $rdb->put( $self->{ _prefix } . 2,     $last + 1 );
-        $rdb->put( $self->{ _prefix } . $last, $value );
-	}
+        if ( $last && $last =~ /^\d+\z/ )
+        {
+            $rdb->put( $self->{ _prefix } . 2,     $last + 1 );
+            $rdb->put( $self->{ _prefix } . $last, $value );
+        }
         $rdb->sync() if ( $self->{ _auto_sync } );
     }
 }
@@ -269,7 +277,7 @@ sub POP
 {
     my $self = shift;
     my $rdb  = $self->{ _rdb };
-    my $last = ($rdb->get( $self->{ _prefix } . 2 )) - 1;
+    my $last = ( $rdb->get( $self->{ _prefix } . 2 ) ) - 1;
     my $val;
     if ( $last >= 3 )
     {
@@ -294,13 +302,17 @@ sub SHIFT
     my $self  = shift;
     my $rdb   = $self->{ _rdb };
     my $first = $rdb->get( $self->{ _prefix } . 1 );
-    my $last  = $rdb->get( $self->{ _prefix } . 2 );
-    my $val   = $rdb->get( $self->{ _prefix } . $first );
-    $rdb->out( $self->{ _prefix } . $first );
-    $rdb->put( $self->{ _prefix } . 1, $first + 1 );
-    $rdb->sync() if ( $self->{ _auto_sync } );
-    $val = $self->__deserialize__( $val ) if ( $self->{ _serialize } );
-    return $val;
+#    my $last  = $rdb->get( $self->{ _prefix } . 2 );
+
+    if ( $first >= 3 )
+    {
+        my $val = $rdb->get( $self->{ _prefix } . $first );
+        $rdb->out( $self->{ _prefix } . $first );
+        $rdb->put( $self->{ _prefix } . 1, $first + 1 );
+        $rdb->sync() if ( $self->{ _auto_sync } );
+        $val = $self->__deserialize__( $val ) if ( $self->{ _serialize } );
+        return $val;
+    }
 }
 
 =head2 EXISTS
@@ -360,9 +372,9 @@ sub FETCHSIZE
 #     $end = $rdb->get( $self->{ _prefix } . 2 ) if ( ($rdb->get( $self->{ _prefix } . 2 )) =~ /^\d+$/);
 #     $start = $rdb->get( $self->{ _prefix } . 1 ) if ( ($rdb->get( $self->{ _prefix } . 1 )) =~ /^\d+$/);
 #     my $size =  $end - $start;
-    my $end = $rdb->get( $self->{ _prefix } . 2 ) || 0;
+    my $end   = $rdb->get( $self->{ _prefix } . 2 ) || 0;
     my $start = $rdb->get( $self->{ _prefix } . 1 ) || 0;
-    my $size = $end - $start;
+    my $size  = $end - $start;
 
 #     my $size = $rdb->get( $self->{ _prefix } . 2 ) - $rdb->get( $self->{ _prefix } . 1 );
     return 0 if ( $size < 0 );
@@ -455,12 +467,15 @@ sub STORESIZE
     my $rdb      = $self->{ _rdb };
     my $first    = $rdb->get( $self->{ _prefix } . 1 );
     my $last     = $rdb->get( $self->{ _prefix } . 2 );
-    for ( ( $first + $new_size ) .. $last )
+    if ( $first >= 3 && $last >= 3 )
     {
-        $self->POP;
+        for ( ( $first + $new_size ) .. $last )
+        {
+            $self->POP;
+        }
+        $rdb->sync() if ( $self->{ _auto_sync } );
+        $rdb->put( $self->{ _prefix } . 2, $first + $new_size );
     }
-    $rdb->sync() if ( $self->{ _auto_sync } );
-    $rdb->put( $self->{ _prefix } . 2, $first + $new_size );
     return $last - $first;
 }
 
@@ -493,9 +508,6 @@ sub __deserialize__
     return $serializer->deserialize( $val ) if $val;
     return $val;
 }
-
-
-
 
 1;
 __END__
