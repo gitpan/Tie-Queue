@@ -131,7 +131,7 @@ use TokyoTyrant;
 
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
 
-$VERSION = '0.11';
+$VERSION = '0.12';
 
 our @ISA = qw( Exporter Tie::StdArray );
 
@@ -152,8 +152,9 @@ I< only the queue relevant functions are present >
 	    5) a namespace to allow more than one queue on the same DB ( default Tie-Queue )
 	    6) a flag to activate or deactivate auto_sync ( default 1 )
 	    7) a flag to prevent undef value to be pushed ( default 0 )
-	    8) a flag to reset a queue if the data queue is corrupted ( default 0 )
-      
+	    8) a flag to use self-healing feature or reset a queue if the data queue is corrupted ( default 0 )
+	    9) e flag to add some debug info on correctable error ( default 0 )
+	    
 =cut
 
 sub TIEARRAY
@@ -169,12 +170,13 @@ sub TIEARRAY
     $data{ _auto_sync }       = $_[6] || 1;
     $data{ _no_undef }        = $_[7] || 0;
     $data{ _clear_on_error }  = $_[8] || 0;
+    $data{ _debug }           = $_[9] || 0;
 
     my $rdb = TokyoTyrant::RDB->new();
     if ( !$rdb->open( $data{ _host }, $data{ _port } ) )
     {
         my $ecode = $rdb->ecode();
-        carp( 'Queue open error: ' . $rdb->errmsg( $ecode ) . "\n" );
+        croak( 'Queue open error: ' . $rdb->errmsg( $ecode ) . "\n" );
     }
     else
     {
@@ -196,12 +198,10 @@ sub TIEARRAY
     {
         if ( $head !~ /^Tie::Queue$/ )
         {
-            carp( "Data in queue corrupted: Wrong Head for".$data{ _prefix }."\n" );
+            carp( "Data in queue corrupted: Wrong Head for " . $data{ _prefix } . "\n" ) if ( $data{ _debug } );
             if ( $data{ _clear_on_error } )
             {
                 $rdb->put( $data{ _prefix } . 0, 'Tie::Queue' );
-                $rdb->put( $data{ _prefix } . 1, 3 );
-                $rdb->put( $data{ _prefix } . 2, 3 );
             }
         }
         else
@@ -221,7 +221,7 @@ sub TIEARRAY
     {
         if ( defined $first || defined $last )
         {
-            carp( "Data in queue corrupted: Data without Head\n" );
+            carp( "Data in queue corrupted: Data without Head\n" ) if ( $data{ _debug } );
         }
         $rdb->put( $data{ _prefix } . 0, 'Tie::Queue' );
         if ( !$rdb->put( $data{ _prefix } . 1, 3 ) )
@@ -262,6 +262,14 @@ sub PUSH
             $rdb->put( $self->{ _prefix } . 2,     $last + 1 );
             $rdb->put( $self->{ _prefix } . $last, $value );
         }
+        else
+        {
+            if ( $self->{ _clear_on_error } )
+            {
+                $self->FETCHSIZE;
+                $self->PUSH( $value );
+            }
+        }
         $rdb->sync() if ( $self->{ _auto_sync } );
     }
 }
@@ -276,16 +284,25 @@ sub PUSH
 sub POP
 {
     my $self = shift;
+
     my $rdb  = $self->{ _rdb };
-    my $last = ( $rdb->get( $self->{ _prefix } . 2 ) ) - 1;
+    my $last = $rdb->get( $self->{ _prefix } . 2 );
     my $val;
-    if ( $last >= 3 )
+    if ( $last && $last =~ /^\d+\z/ )
     {
+        $last--;
         $val = $rdb->get( $self->{ _prefix } . $last );
         $rdb->put( $self->{ _prefix } . 2, $last );
         $rdb->out( $self->{ _prefix } . $last );
         $rdb->sync() if ( $self->{ _auto_sync } );
         $val = $self->__deserialize__( $val ) if ( $self->{ _serialize } );
+    }
+    else
+    {
+        if ( $self->{ _clear_on_error } )
+        {
+            $self->CLEAR;
+        }
     }
     return $val;
 }
@@ -299,12 +316,11 @@ sub POP
 
 sub SHIFT
 {
-    my $self  = shift;
+    my $self = shift;
+
     my $rdb   = $self->{ _rdb };
     my $first = $rdb->get( $self->{ _prefix } . 1 );
-#    my $last  = $rdb->get( $self->{ _prefix } . 2 );
-
-    if ( $first >= 3 )
+    if ( $first && $first =~ /^\d+\z/ )
     {
         my $val = $rdb->get( $self->{ _prefix } . $first );
         $rdb->out( $self->{ _prefix } . $first );
@@ -312,6 +328,13 @@ sub SHIFT
         $rdb->sync() if ( $self->{ _auto_sync } );
         $val = $self->__deserialize__( $val ) if ( $self->{ _serialize } );
         return $val;
+    }
+    else
+    {
+        if ( $self->{ _clear_on_error } )
+        {
+            $self->CLEAR;
+        }
     }
 }
 
@@ -326,7 +349,8 @@ sub EXISTS
 {
     my $self = shift;
     my $key  = shift;
-    my $rdb  = $self->{ _rdb };
+
+    my $rdb = $self->{ _rdb };
     return 0 unless ( $rdb->rnum() );
     my $first = $rdb->get( $self->{ _prefix } . 1 ) || 0;
     $key += $first;
@@ -346,9 +370,10 @@ sub EXISTS
 
 sub FETCH
 {
-    my $self  = shift;
-    my $key   = shift;
-    my $rdb   = $self->{ _rdb };
+    my $self = shift;
+    my $key  = shift;
+
+    my $rdb = $self->{ _rdb };
     my $first = $rdb->get( $self->{ _prefix } . 1 ) || 0;
     $key += $first;
     my $val = $rdb->get( $self->{ _prefix } . $key );
@@ -366,19 +391,57 @@ sub FETCH
 sub FETCHSIZE
 {
     my $self = shift;
-    my $rdb  = $self->{ _rdb };
-#     my $end =  0 ;
-#     my $start = 0 ;
-#     $end = $rdb->get( $self->{ _prefix } . 2 ) if ( ($rdb->get( $self->{ _prefix } . 2 )) =~ /^\d+$/);
-#     $start = $rdb->get( $self->{ _prefix } . 1 ) if ( ($rdb->get( $self->{ _prefix } . 1 )) =~ /^\d+$/);
-#     my $size =  $end - $start;
+
+    my $rdb   = $self->{ _rdb };
     my $end   = $rdb->get( $self->{ _prefix } . 2 ) || 0;
     my $start = $rdb->get( $self->{ _prefix } . 1 ) || 0;
-    my $size  = $end - $start;
-
-#     my $size = $rdb->get( $self->{ _prefix } . 2 ) - $rdb->get( $self->{ _prefix } . 1 );
-    return 0 if ( $size < 0 );
-    return ( $size );
+    if ( $end && $end =~ /^\d+\z/ )
+    {
+        if ( $start && $start =~ /^\d+\z/ )
+        {
+            my $size = $end - $start;
+            return 0 if ( $size < 0 );
+            return ( $size );
+        }
+        else
+        {
+            $rdb->iterinit();
+            my $nbr = 0;
+            while ( my $item = $rdb->iternext() )
+            {
+                my $name = $self->{ _prefix };
+                next unless $item =~ /$name\d+/;
+                $nbr++;
+            }
+            my $new_start = $end - 3 - $nbr;
+            $new_start = $new_start < 3 ? 3 : $new_start;
+            $rdb->put( $self->{ _prefix } . 1, $new_start );
+            return 0;
+        }
+    }
+    else
+    {
+        if ( $start && $start =~ /^\d+\z/ )
+        {
+            $rdb->iterinit();
+            my $nbr = 0;
+            while ( my $item = $rdb->iternext() )
+            {
+                my $name = $self->{ _prefix };
+                next unless $item =~ /$name\d+/;
+                $nbr++;
+            }
+            $rdb->put( $self->{ _prefix } . 2, $nbr );
+        }
+        else
+        {
+            if ( $self->{ _clear_on_error } )
+            {
+                carp( "Data in queue corrupted: Wrong first and last element, no recovery possible for " . $self->{ _prefix } . "\n" ) if ( $self->{ _debug } );
+                $self->CLEAR;
+            }
+        }
+    }
 }
 
 =head2 SYNC
@@ -391,7 +454,8 @@ sub FETCHSIZE
 sub SYNC
 {
     my $self = shift;
-    my $rdb  = $self->{ _rdb };
+
+    my $rdb = $self->{ _rdb };
     $rdb->sync();
 }
 
@@ -405,8 +469,17 @@ sub SYNC
 sub CLEAR
 {
     my $self = shift;
-    my $rdb  = $self->{ _rdb };
-    while ( $self->POP() ) { }
+
+    my $rdb = $self->{ _rdb };
+    $rdb->iterinit();
+    while ( my $item = $rdb->iternext() )
+    {
+        my $name = $self->{ _prefix };
+        next unless $item =~ /$name\d+/;
+        $rdb->out( $item );
+    }
+
+    $rdb->put( $self->{ _prefix } . 0, 'Tie::Queue' );
     $rdb->put( $self->{ _prefix } . 1, 3 );
     $rdb->put( $self->{ _prefix } . 2, 3 );
     $rdb->sync() if ( $self->{ _auto_sync } );
@@ -422,7 +495,8 @@ sub CLEAR
 sub DESTROY
 {
     my $self = shift;
-    my $rdb  = $self->{ _rdb };
+
+    my $rdb = $self->{ _rdb };
     $rdb->close();
 }
 
@@ -464,10 +538,11 @@ sub STORESIZE
 {
     my $self     = shift;
     my $new_size = shift;
-    my $rdb      = $self->{ _rdb };
-    my $first    = $rdb->get( $self->{ _prefix } . 1 );
-    my $last     = $rdb->get( $self->{ _prefix } . 2 );
-    if ( $first >= 3 && $last >= 3 )
+
+    my $rdb   = $self->{ _rdb };
+    my $first = $rdb->get( $self->{ _prefix } . 1 );
+    my $last  = $rdb->get( $self->{ _prefix } . 2 );
+    if ( $first && $last && $first =~ /^\d+\z/ && $last =~ /^\d+\z/ )
     {
         for ( ( $first + $new_size ) .. $last )
         {
@@ -493,8 +568,9 @@ sub DELETE { carp "no DELETE function"; }
 
 sub __serialize__
 {
-    my $self       = shift;
-    my $val        = shift;
+    my $self = shift;
+    my $val  = shift;
+
     my $serializer = $self->{ _serialize };
     return $serializer->serialize( $val ) if $val;
     return $val;
@@ -502,8 +578,9 @@ sub __serialize__
 
 sub __deserialize__
 {
-    my $self       = shift;
-    my $val        = shift;
+    my $self = shift;
+    my $val  = shift;
+
     my $serializer = $self->{ _serialize };
     return $serializer->deserialize( $val ) if $val;
     return $val;

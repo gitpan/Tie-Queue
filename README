@@ -81,27 +81,27 @@ SYNOPSIS
 
 DESCRIPTION
       Tie an ARRAY over a TokyTyrant DB and allow to push, pop shift  data;
-      
-  This module require TokyoTyrant (database and perl module.)
+  
+      This module require TokyoTyrant (database and perl module.)
       If the serialisation is required, the module Data::Serilizer is also required
-      
-  The normal ARRAY function present are
-      
-  push
+  
+      The normal ARRAY function present are
+  
+      push
       pop
       shift
       exists
       scalar
       storesize ( to allow undef @a)
-      
-  Specific function
+  
+      Specific function
       CLEAR
       SYNC
 
-      
-  The following function are not implemented.
-      
-  EXTEND
+  
+      The following function are not implemented.
+  
+      EXTEND
       STORE
       DELETE
       SPLICE
@@ -112,8 +112,8 @@ Basic functions
   tie
             Tie an array over a DB
             my $t = tie( my @myarray, "Tie::Queue", '127.0.0.1', 1978, 1 , 1 , 'first_name' ,  1 , 0 );
-            
-        Six optional parameter are allowed
+        
+            Six optional parameter are allowed
                 1) the IP where the TokyoTyrant is running ( default 127.0.0.1 )
                 2) the port on which the TokyoTyrant is listenning ( default 1978 )
                 3) a flag to delete at start the DB ( default 0 )
@@ -122,6 +122,7 @@ Basic functions
                 6) a flag to activate or deactivate auto_sync ( default 1 )
                 7) a flag to prevent undef value to be pushed ( default 0 )
                 8) a flag to reset a queue if the data queue is corrupted ( default 0 )
+                9) e flag to add some debug info on correctable error ( default 0 )
 
   PUSH
             Add an element at the end of the array
