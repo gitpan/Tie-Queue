@@ -1,4 +1,7 @@
-
+----------------------------
+revision : 0.13
+date : 2009/10/13 14:17:47
+check start elem is numeric in fetch and exists and clear data if clear_on_error flag is set
 ----------------------------
 revision : 0.12
 date : 2009/10/09 16:28:21
