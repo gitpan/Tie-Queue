@@ -1,4 +1,9 @@
 ----------------------------
+revision : 0.14
+date : 2009/10/15 18:19:13
+add methode REPAIR
+use that function internaly when the queue is corrupted
+----------------------------
 revision : 0.13
 date : 2009/10/13 14:17:47
 check start elem is numeric in fetch and exists and clear data if clear_on_error flag is set

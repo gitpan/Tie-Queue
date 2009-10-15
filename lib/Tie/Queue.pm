@@ -107,9 +107,10 @@ package Tie::Queue;
   storesize ( to allow undef @a)
   
   Specific function
+  
   CLEAR
   SYNC
-
+  REPAIR
   
   The following function are not implemented.
   
@@ -131,7 +132,7 @@ use TokyoTyrant;
 
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
 
-$VERSION = '0.13';
+$VERSION = '0.14';
 
 our @ISA = qw( Exporter Tie::StdArray );
 
@@ -191,8 +192,12 @@ sub TIEARRAY
         $data{ _serialize } = $serialiser;
     }
     my $head  = $rdb->get( $data{ _prefix } . 0 );
-    my $first = $rdb->get( $data{ _prefix } . 1 );
-    my $last  = $rdb->get( $data{ _prefix } . 2 );
+    my $first = $rdb->get( $data{ _prefix } . 1 ) || 3;
+    my $last  = $rdb->get( $data{ _prefix } . 2 ) || 3;
+    if ( !$last || !$first || ( $last !~ /^\d+\z/ ) || ( $first !~ /^\d+\z/ ) || $last < $first )
+    {
+        ( $first, $last ) = REPAIR( \%data );
+    }
 
     if ( defined $head )
     {
@@ -259,14 +264,14 @@ sub PUSH
         my $last = $rdb->get( $self->{ _prefix } . 2 );
         if ( $last && $last =~ /^\d+\z/ )
         {
-            $rdb->put( $self->{ _prefix } . 2, $last + 1 );
+            $rdb->put( $self->{ _prefix } . 2,     $last + 1 );
             $rdb->put( $self->{ _prefix } . $last, $value );
         }
         else
         {
             if ( $self->{ _clear_on_error } )
             {
-                $self->FETCHSIZE;
+                $self->REPAIR;
                 $self->PUSH( $value );
             }
         }
@@ -413,60 +418,18 @@ sub FETCHSIZE
     my $self = shift;
 
     my $rdb   = $self->{ _rdb };
-    my $end   = $rdb->get( $self->{ _prefix } . 2 ) || 0;
-    my $start = $rdb->get( $self->{ _prefix } . 1 ) || 0;
-    if ( $end && $end =~ /^\d+\z/ )
+    my $last  = $rdb->get( $self->{ _prefix } . 2 );
+    my $first = $rdb->get( $self->{ _prefix } . 1 );
+    if ( !$last || !$first || ( $last !~ /^\d+\z/ ) || ( $first !~ /^\d+\z/ ) || $last < $first )
     {
-        if ( $start && $start =~ /^\d+\z/ )
-        {
-            my $size = $end - $start;
-            return 0 if ( $size < 0 );
-            return ( $size );
-        }
-        else
-        {
-            $rdb->iterinit();
-            my $nbr = 0;
-            while ( my $item = $rdb->iternext() )
-            {
-                my $name = $self->{ _prefix };
-                next unless $item =~ /$name\d+/;
-                $nbr++;
-            }
-            my $new_start = $end - 3 - $nbr;
-            $new_start = $new_start < 3 ? 3 : $new_start;
-            $rdb->put( $self->{ _prefix } . 1, $new_start );
-            return 0;
-        }
+        ( $first, $last ) = $self->REPAIR();
     }
-    else
-    {
-        if ( $start && $start =~ /^\d+\z/ )
-        {
-            $rdb->iterinit();
-            my $nbr = 0;
-            while ( my $item = $rdb->iternext() )
-            {
-                my $name = $self->{ _prefix };
-                next unless $item =~ /$name\d+/;
-                $nbr++;
-            }
-            $rdb->put( $self->{ _prefix } . 2, $nbr );
-        }
-        else
-        {
-            if ( $self->{ _clear_on_error } )
-            {
-                carp( "Data in queue corrupted: Wrong first and last element, no recovery possible for " . $self->{ _prefix } . "\n" ) if ( $self->{ _debug } );
-                $self->CLEAR;
-            }
-        }
-    }
+    return $last - $first;
 }
 
 =head2 SYNC
 	
-	FOorce a sync of the DB ( not usefull is auto_sync is on)
+	Force a sync of the DB ( not usefull is auto_sync is on)
 	$t->SYNC;
       
 =cut
@@ -518,6 +481,35 @@ sub DESTROY
 
     my $rdb = $self->{ _rdb };
     $rdb->close();
+}
+
+
+=head2 REPAIR
+	
+	Force a rescan of all elements in the queue and recreate the right indexes
+	
+=cut
+
+sub REPAIR
+{
+    my $self = shift;
+    my $rdb  = $self->{ _rdb };
+    $rdb->iterinit();
+    my $new_start = 3;
+    my $new_end   = 3;
+    my $tmp;
+    while ( my $item = $rdb->iternext() )
+    {
+        my $name = $self->{ _prefix };
+        next unless $item =~ /$name(\d+)/;
+        $tmp = $1;
+        next if ( $tmp < 3 );
+        $new_start = $tmp if ( $tmp < $new_start );
+        $new_end   = $tmp if ( $tmp > $new_end );
+    }
+    $rdb->put( $self->{ _prefix } . 1, $new_start );
+    $rdb->put( $self->{ _prefix } . 2, $new_end + 1 );
+    return $new_start, $new_end;
 }
 
 =head1 Functions not Implemented
@@ -581,6 +573,7 @@ sub STORESIZE
 =cut
 
 sub DELETE { carp "no DELETE function"; }
+
 
 ########################
 # internal function
