@@ -132,7 +132,7 @@ use TokyoTyrant;
 
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
 
-$VERSION = '0.14';
+$VERSION = '0.15';
 
 our @ISA = qw( Exporter Tie::StdArray );
 
@@ -203,7 +203,8 @@ sub TIEARRAY
     {
         if ( $head !~ /^Tie::Queue$/ )
         {
-            carp( "Data in queue corrupted: Wrong Head for " . $data{ _prefix } . "\n" ) if ( $data{ _debug } );
+            carp( "Data in queue corrupted: Wrong Head for " . $data{ _prefix } . "\n" )
+              if ( $data{ _debug } );
             if ( $data{ _clear_on_error } )
             {
                 $rdb->put( $data{ _prefix } . 0, 'Tie::Queue' );
@@ -458,7 +459,7 @@ sub CLEAR
     while ( my $item = $rdb->iternext() )
     {
         my $name = $self->{ _prefix };
-        next unless $item =~ /$name\d+/;
+        next unless $item =~ /^$name\d+$/;
         $rdb->out( $item );
     }
 
@@ -483,7 +484,6 @@ sub DESTROY
     $rdb->close();
 }
 
-
 =head2 REPAIR
 	
 	Force a rescan of all elements in the queue and recreate the right indexes
@@ -498,14 +498,27 @@ sub REPAIR
     my $new_start = 3;
     my $new_end   = 3;
     my $tmp;
-    while ( my $item = $rdb->iternext() )
+    while ( my $key = $rdb->iternext() )
     {
         my $name = $self->{ _prefix };
-        next unless $item =~ /$name(\d+)/;
+        next unless $key =~ /^$name(\d+)$/;
         $tmp = $1;
         next if ( $tmp < 3 );
-        $new_start = $tmp if ( $tmp < $new_start );
-        $new_end   = $tmp if ( $tmp > $new_end );
+        if ( $self->{ _no_undef } )
+        {
+            my $val = $rdb->get( $key );
+            if ( !defined $val )
+            {
+                $rdb->out( $key );
+                $new_start = $tmp if ( $tmp < $new_start );
+                $new_end   = $tmp if ( $tmp > $new_end );
+            }
+        }
+        else
+        {
+            $new_start = $tmp if ( $tmp < $new_start );
+            $new_end   = $tmp if ( $tmp > $new_end );
+        }
     }
     $rdb->put( $self->{ _prefix } . 1, $new_start );
     $rdb->put( $self->{ _prefix } . 2, $new_end + 1 );
@@ -573,7 +586,6 @@ sub STORESIZE
 =cut
 
 sub DELETE { carp "no DELETE function"; }
-
 
 ########################
 # internal function

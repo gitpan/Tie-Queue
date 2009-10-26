@@ -1,38 +1,43 @@
+
+----------------------------
+revision : 0.15
+Date:   Thu Oct 22 14:45:04 2009 +0200
+more strict check on the name of item in DELETE and REPAIR ( /$name(\d+)/ become /^$name(\d+)$/ )
 ----------------------------
 revision : 0.14
-date : 2009/10/15 18:19:13
+Date:   Thu Oct 15 18:19:13 2009 +0200
 add methode REPAIR
 use that function internaly when the queue is corrupted
 ----------------------------
 revision : 0.13
-date : 2009/10/13 14:17:47
+Date:   Tue Oct 13 14:17:47 2009 +0200
 check start elem is numeric in fetch and exists and clear data if clear_on_error flag is set
 ----------------------------
 revision : 0.12
-date : 2009/10/09 16:28:21
+Date:   Fri Oct 9 16:28:21 2009 +0200
 add some self healing features
 add debug flag
 ----------------------------
 revision : 0.11
-date : 2009/10/07 12:24:35
+Date:   Wed Oct 7 12:24:35 2009 +0200
 add a flag to reset the queue if the data are corrupted
 more strict in the data to add ( check if first and last elem are >= 3 )
 carp give the queue name if the data is corrupted
 ----------------------------
 revision : 0.10
-date : 2009/09/29 14:16:19
+Date:   Tue Sep 29 14:16:19 2009 +0200
 don't push if the item number is not a integer
 ----------------------------
 revision : 0.09
-date : 2009/09/24 15:53:14 2009 +0200
+Date:   Thu Sep 24 15:53:14 2009 +0200
 fix a warning when getting the size of an empty queue
 ----------------------------
 revision : 0.08
-date : 2009/09/24 11:49:39
+Date:   Thu Sep 24 11:49:39 2009 +0200
 add a flag to prevent insertion of undef value
 --------------------------------------------------------
 revision : 0.07
-date : 2009/08/12 12:10:37
+Date:   Wed Aug 12 12:10:37 2009 +0200
 fix an error when calculation size on a non initialized queue
 ----------------------------
 revision : 0.06
