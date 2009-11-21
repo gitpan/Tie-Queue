@@ -1,4 +1,7 @@
-
+----------------------------
+revision : 0.16
+Date:   Sat Nov 21 23:13:10 2009 +0100
+add code and flag to prevent duplicate value in the queue
 ----------------------------
 revision : 0.15
 Date:   Thu Oct 22 14:45:04 2009 +0200

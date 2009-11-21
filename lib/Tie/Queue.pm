@@ -132,7 +132,7 @@ use TokyoTyrant;
 
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
 
-$VERSION = '0.15';
+$VERSION = '0.16';
 
 our @ISA = qw( Exporter Tie::StdArray );
 
@@ -154,7 +154,8 @@ I< only the queue relevant functions are present >
 	    6) a flag to activate or deactivate auto_sync ( default 1 )
 	    7) a flag to prevent undef value to be pushed ( default 0 )
 	    8) a flag to use self-healing feature or reset a queue if the data queue is corrupted ( default 0 )
-	    9) e flag to add some debug info on correctable error ( default 0 )
+	    9) a flag to add some debug info on correctable error ( default 0 )
+	   10) a flag to prevent insertion of duplicate value ( default 0 )
 	    
 =cut
 
@@ -171,7 +172,8 @@ sub TIEARRAY
     $data{ _auto_sync }       = $_[6] || 1;
     $data{ _no_undef }        = $_[7] || 0;
     $data{ _clear_on_error }  = $_[8] || 0;
-    $data{ _debug }           = $_[9] || 0;
+    $data{ _debug }           = $_[9] || 0; 
+    $data{ _no_duplicate}     = $_[10] || 0; 
 
     my $rdb = TokyoTyrant::RDB->new();
     if ( !$rdb->open( $data{ _host }, $data{ _port } ) )
@@ -263,6 +265,17 @@ sub PUSH
         my $rdb = $self->{ _rdb };
         $value = $self->__serialize__( $value ) if ( $self->{ _serialize } );
         my $last = $rdb->get( $self->{ _prefix } . 2 );
+	if ( $self->{ _no_duplicate } )
+        {
+	    my $first = $rdb->get( $self->{ _prefix } . 1 ) || 3;
+            my $last  = $rdb->get( $self->{ _prefix } . 2 ) || 3;
+	        for ( my $inx = $first ; $inx <= $last ; $inx++ )
+                {
+                    my $item_value = $rdb->get( $self->{ _prefix } . $inx );
+		    return  if ( $item_value eq $value ) ;
+                }
+
+        }
         if ( $last && $last =~ /^\d+\z/ )
         {
             $rdb->put( $self->{ _prefix } . 2,     $last + 1 );
