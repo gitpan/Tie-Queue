@@ -132,7 +132,7 @@ use TokyoTyrant;
 
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
 
-$VERSION = '0.16';
+$VERSION = '0.17';
 
 our @ISA = qw( Exporter Tie::StdArray );
 
@@ -267,14 +267,12 @@ sub PUSH
         my $last = $rdb->get( $self->{ _prefix } . 2 );
 	if ( $self->{ _no_duplicate } )
         {
-	    my $first = $rdb->get( $self->{ _prefix } . 1 ) || 3;
-            my $last  = $rdb->get( $self->{ _prefix } . 2 ) || 3;
+	    my $first = $rdb->get( $self->{ _prefix } . 1 );
 	        for ( my $inx = $first ; $inx <= $last ; $inx++ )
                 {
-                    my $item_value = $rdb->get( $self->{ _prefix } . $inx );
+                    my $item_value = $rdb->get( $self->{ _prefix } . $inx ) || '';
 		    return  if ( $item_value eq $value ) ;
                 }
-
         }
         if ( $last && $last =~ /^\d+\z/ )
         {
