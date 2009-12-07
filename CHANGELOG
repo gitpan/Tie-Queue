@@ -1,4 +1,8 @@
 ----------------------------
+revision : 0.18
+Date:   Mon Dec 7 14:35:23 2009 +0100
+in PUSH if last elem not a number don't try any action ( insert or test duplicate )
+----------------------------
 revision : 0.17
 Date:   Mon Nov 23 15:18:46 2009 +0100
 prevent a warning when using no_duplicate and item are not present

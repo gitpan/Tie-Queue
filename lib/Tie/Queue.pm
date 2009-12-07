@@ -132,7 +132,7 @@ use TokyoTyrant;
 
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
 
-$VERSION = '0.17';
+$VERSION = '0.18';
 
 our @ISA = qw( Exporter Tie::StdArray );
 
@@ -164,16 +164,16 @@ sub TIEARRAY
     my $class = $_[0];
     my %data;
 
-    $data{ _host }            = $_[1] || '127.0.0.1';
-    $data{ _port }            = $_[2] || 1978;
-    $data{ _delete_on_start } = $_[3] || 0;
-    $data{ _serialize }       = $_[4] || 0;
-    $data{ _prefix }          = $_[5] || 'Tie-Queue';
-    $data{ _auto_sync }       = $_[6] || 1;
-    $data{ _no_undef }        = $_[7] || 0;
-    $data{ _clear_on_error }  = $_[8] || 0;
-    $data{ _debug }           = $_[9] || 0; 
-    $data{ _no_duplicate}     = $_[10] || 0; 
+    $data{ _host }            = $_[1]  || '127.0.0.1';
+    $data{ _port }            = $_[2]  || 1978;
+    $data{ _delete_on_start } = $_[3]  || 0;
+    $data{ _serialize }       = $_[4]  || 0;
+    $data{ _prefix }          = $_[5]  || 'Tie-Queue';
+    $data{ _auto_sync }       = $_[6]  || 1;
+    $data{ _no_undef }        = $_[7]  || 0;
+    $data{ _clear_on_error }  = $_[8]  || 0;
+    $data{ _debug }           = $_[9]  || 0;
+    $data{ _no_duplicate }    = $_[10] || 0;
 
     my $rdb = TokyoTyrant::RDB->new();
     if ( !$rdb->open( $data{ _host }, $data{ _port } ) )
@@ -265,18 +265,18 @@ sub PUSH
         my $rdb = $self->{ _rdb };
         $value = $self->__serialize__( $value ) if ( $self->{ _serialize } );
         my $last = $rdb->get( $self->{ _prefix } . 2 );
-	if ( $self->{ _no_duplicate } )
-        {
-	    my $first = $rdb->get( $self->{ _prefix } . 1 );
-	        for ( my $inx = $first ; $inx <= $last ; $inx++ )
-                {
-                    my $item_value = $rdb->get( $self->{ _prefix } . $inx ) || '';
-		    return  if ( $item_value eq $value ) ;
-                }
-        }
         if ( $last && $last =~ /^\d+\z/ )
         {
-            $rdb->put( $self->{ _prefix } . 2,     $last + 1 );
+            if ( $self->{ _no_duplicate } )
+            {
+                my $first = $rdb->get( $self->{ _prefix } . 1 );
+                for ( my $inx = $first ; $inx <= $last ; $inx++ )
+                {
+                    my $item_value = $rdb->get( $self->{ _prefix } . $inx ) || '';
+                    return if ( $item_value eq $value );
+                }
+            }
+            $rdb->put( $self->{ _prefix } . 2, $last + 1 );
             $rdb->put( $self->{ _prefix } . $last, $value );
         }
         else
