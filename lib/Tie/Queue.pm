@@ -132,7 +132,7 @@ use TokyoTyrant;
 
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
 
-$VERSION = '0.18';
+$VERSION = '0.19';
 
 our @ISA = qw( Exporter Tie::StdArray );
 
@@ -264,28 +264,50 @@ sub PUSH
     {
         my $rdb = $self->{ _rdb };
         $value = $self->__serialize__( $value ) if ( $self->{ _serialize } );
-        my $last = $rdb->get( $self->{ _prefix } . 2 );
-        if ( $last && $last =~ /^\d+\z/ )
+        my $first = $rdb->get( $self->{ _prefix } . 1 );
+        if ( $first && $first =~ /^\d+\z/ )
         {
-            if ( $self->{ _no_duplicate } )
+            my $last = $rdb->get( $self->{ _prefix } . 2 );
+
+            if ( $last && $last =~ /^\d+\z/ )
             {
-                my $first = $rdb->get( $self->{ _prefix } . 1 );
-                for ( my $inx = $first ; $inx <= $last ; $inx++ )
+                if ( $self->{ _no_duplicate } )
                 {
-                    my $item_value = $rdb->get( $self->{ _prefix } . $inx ) || '';
-                    return if ( $item_value eq $value );
+
+                    for ( my $inx = $first ; $inx <= $last ; $inx++ )
+                    {
+                        my $item_value = $rdb->get( $self->{ _prefix } . $inx ) || '';
+                        return if ( $item_value eq $value );
+                    }
                 }
+                $rdb->put( $self->{ _prefix } . 2,     $last + 1 );
+                $rdb->put( $self->{ _prefix } . $last, $value );
             }
-            $rdb->put( $self->{ _prefix } . 2, $last + 1 );
-            $rdb->put( $self->{ _prefix } . $last, $value );
+            else
+            {
+                if ( $self->{ _clear_on_error } )
+                {
+                    $self->CLEAR;
+                }
+                else
+                {
+                    $self->REPAIR;
+                }
+                $self->PUSH( $value );
+            }
         }
         else
         {
             if ( $self->{ _clear_on_error } )
             {
-                $self->REPAIR;
-                $self->PUSH( $value );
+                $self->CLEAR;
             }
+            else
+            {
+                $self->REPAIR;
+            }
+            $self->PUSH( $value );
+
         }
         $rdb->sync() if ( $self->{ _auto_sync } );
     }
@@ -505,6 +527,7 @@ sub REPAIR
 {
     my $self = shift;
     my $rdb  = $self->{ _rdb };
+    $rdb->sync();
     $rdb->iterinit();
     my $new_start = 3;
     my $new_end   = 3;

@@ -1,4 +1,9 @@
 ----------------------------
+revision : 0.19
+Date:   Thu Dec 10 11:31:28 2009 +0100
+if first elem NOK do a REPAIR
+if _clear_on_error , CLEAR the queue if error in PUSH otherwise REPAIR
+----------------------------
 revision : 0.18
 Date:   Mon Dec 7 14:35:23 2009 +0100
 in PUSH if last elem not a number don't try any action ( insert or test duplicate )
